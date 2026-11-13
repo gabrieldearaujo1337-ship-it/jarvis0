@@ -6,4 +6,122 @@
   <title>JARVIS</title>
   <style>
     body {
-      background: #050
+      background: #050505;
+      color: #00d4ff;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+    #reator {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #00d4ff, #002b33);
+      border: 3px solid #00d4ff;
+      cursor: pointer;
+      box-shadow: 0 0 30px #00d4ff, 0 0 60px #00d4ff44;
+      animation: pulse 2s infinite;
+    }
+    #reator:hover {
+      box-shadow: 0 0 50px #00d4ff, 0 0 100px #00d4ff66;
+    }
+    #status {
+      margin-top: 25px;
+      font-size: 0.9em;
+      opacity: 0.7;
+    }
+    #response {
+      margin-top: 15px;
+      max-width: 600px;
+      text-align: center;
+      font-size: 1.15em;
+      min-height: 60px;
+      padding: 10px;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body>
+  <div id="reator" title="Toque para falar"></div>
+  <div id="status">TOQUE NO REATOR PARA FALAR</div>
+  <div id="response"></div>
+
+  <script>
+    const WORKER_URL = 'https://jarvis-proxy.gabrieldearaujo1337.workers.dev';
+
+    const reator = document.getElementById('reator');
+    const statusEl = document.getElementById('status');
+    const responseEl = document.getElementById('response');
+
+    // --- FALA (TTS) - voz estilo JARVIS ---
+    function speak(text) {
+      if (!('speechSynthesis' in window)) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'pt-BR';
+      u.rate = 1.05;
+      u.pitch = 0.85; // tom mais grave/robótico
+      const voices = speechSynthesis.getVoices();
+      const ptVoice = voices.find(v => v.lang.startsWith('pt'));
+      if (ptVoice) u.voice = ptVoice;
+      speechSynthesis.speak(u);
+    }
+
+    // --- ESCUTA (STT) - fala do usuário ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+    }
+
+    async function falarComJarvis(userText) {
+      statusEl.textContent = 'JARVIS processando...';
+      responseEl.textContent = '';
+      try {
+        const res = await fetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: userText })
+        });
+        const data = await res.json();
+        const reply = data.text || 'Erro ao contactar JARVIS.';
+        responseEl.textContent = reply;
+        statusEl.textContent = 'JARVIS respondeu:';
+        speak(reply);
+      } catch (err) {
+        responseEl.textContent = 'Erro de conexão: ' + err.message;
+        statusEl.textContent = 'Falha na conexão.';
+      }
+    }
+
+    reator.addEventListener('click', () => {
+      if (recognition) {
+        statusEl.textContent = 'Ouvindo... fale agora';
+        try { recognition.start(); } catch { /* já rodando */ }
+        recognition.onresult = (e) => {
+          const texto = e.results[0][0].transcript;
+          responseEl.textContent = 'Você: ' + texto;
+          falarComJarvis(texto);
+        };
+        recognition.onerror = () => {
+          statusEl.textContent = 'Não entendi. Toque de novo.';
+        };
+      } else {
+        // fallback sem microfone: usa frase padrão
+        falarComJarvis('O usuário tocou no reator.');
+      }
+    });
+  </script>
+</body>
+</html>
